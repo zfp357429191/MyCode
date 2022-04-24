@@ -14,15 +14,48 @@ extern "C" {
 #include "libavfilter/buffersrc.h"
 #include "libavutil/avutil.h"
 
-
 }
 
-// 打开本地音视频文件
+#define FFMPEG_OLD true;    // 是否旧版本
+
+#define MAX_AV_PLANES 8
+struct obs_source_frame2 {
+    uint8_t* data[MAX_AV_PLANES];
+    uint32_t linesize[MAX_AV_PLANES];
+    uint32_t width;
+    uint32_t height;
+    uint64_t timestamp;
+
+    enum video_format format;
+    enum video_range_type range;
+    float color_matrix[16];
+    float color_range_min[3];
+    float color_range_max[3];
+    bool flip;
+    uint8_t flags;
+};
+
+// **************************************************************
+
+/*----------------------------------------------------------------
+ * @brief: 打开本地视频测试
+ *---------------------------------------------------------------*/
 void TestOpenLocalVideo() {
+
+#if FFMPEG_OLD
+    //// 测试DLL
+    //printf("%s\n", avcodec_configuration());
+
+    av_register_all();                  // 注册DLL
+    avformat_network_init();            // 注册网络
+#endif
 
     AVFormatContext* pFormat = nullptr;
     std::string strVideoPath = "../../MediaSource/t1002.mp4";
 
+    //AVDictionary* opt = nullptr;
+    //av_dict_set(&opt, "rtsp_transport", "tcp", 0);
+    //av_dict_set(&opt, "max_delay", "550", 0);
     // 打开输入
     int ret = avformat_open_input(&pFormat, strVideoPath.c_str(), nullptr, nullptr);
     if (ret) {
@@ -53,7 +86,7 @@ void TestOpenLocalVideo() {
     // 寻找流
     int nVideoStream = av_find_best_stream(pFormat, AVMEDIA_TYPE_VIDEO, -1, -1, nullptr, NULL);
     
-#if 0 // 旧版写法
+#if FFMPEG_OLD // 旧版写法
     AVCodecContext* pCodecContext = pFormat->streams[nVideoStream]->codec;
 
 #else // 新版写法
@@ -84,7 +117,7 @@ void TestOpenLocalVideo() {
     AVPixelFormat pixFmt = pCodecContext->pix_fmt;
 
     // 分配空间 进行图像转换
-#if 0 // 旧版写法
+#if FFMPEG_OLD // 旧版写法
     int nSize = avpicture_get_size(AV_PIX_FMT_YUV420P, nWidth, nHeight);
 #else // 新版写法
     int nSize = av_image_get_buffer_size(AV_PIX_FMT_YUV420P, nWidth, nHeight, 1);
@@ -92,7 +125,7 @@ void TestOpenLocalVideo() {
     uint8_t* pBuff = (uint8_t*)av_malloc(nSize);
 
     // 一帧图像
-#if 0 // 旧版本
+#if FFMPEG_OLD // 旧版本
     avpicture_fill((AVPicture*)pFrameYUV, pBuff, AV_PIX_FMT_YUV420P, nWidth, nHeight);
 #else // 新版写法
     av_image_fill_arrays(pFrameYUV->data, pFrameYUV->linesize, pBuff, AV_PIX_FMT_YUV420P, nWidth, nHeight, 1);
@@ -111,10 +144,10 @@ void TestOpenLocalVideo() {
     while (av_read_frame(pFormat, pPacket) >= 0) {
         // 判断stream_index
         if (AVMEDIA_TYPE_VIDEO == pPacket->stream_index) {
-#if 0 // 旧版本
-            ret = if (avcodec_decode_video2(pCodecContext, pFrame, &go, pPacket)) {
+#if FFMPEG_OLD // 旧版本
+            ret = avcodec_decode_video2(pCodecContext, pFrame, &go, pPacket);
 #else
-            ret = avcodec_send_packet(pCodecContext, pPacket);
+            //ret = avcodec_send_packet(pCodecContext, pPacket);
             ret = (avcodec_send_packet(pCodecContext, pPacket) && (go = avcodec_receive_frame(pCodecContext, pFrame)));
 #endif
             if (ret) {
@@ -123,8 +156,13 @@ void TestOpenLocalVideo() {
             }
 
             if (go) {
-                sws_scale(pswsContext, (uint8_t**)pFrame->data, pFrame->linesize, 
-                          0, nHeight, pFrameYUV->data, pFrameYUV->linesize);
+                sws_scale(pswsContext, 
+                          /*(uint8_t**)*/pFrame->data, 
+                          pFrame->linesize, 
+                          0, 
+                          nHeight, 
+                          pFrameYUV->data, 
+                          pFrameYUV->linesize);
                 ++nFrameCount;
                 std::cout << "frame index : " << nFrameCount << std::endl;
             }
@@ -139,8 +177,9 @@ void TestOpenLocalVideo() {
 
 
 }
-
-// 打开网络流视频
+/*----------------------------------------------------------------
+ * @brief: 打开网络视频测试
+ *---------------------------------------------------------------*/
 void TestNetworkVideo() {
 
     // 初始化网络设置
@@ -542,6 +581,125 @@ int TestFlipVideo2() {
     //avpicture_get_size()
     //sws_getContext()
 
+}
+
+/*----------------------------------------------------------------
+ * @brief:     OBS视频帧水平翻转
+ * @param[in]: obs_source_frame2，obs数据帧
+ * @return:    转换成功与否
+ *---------------------------------------------------------------*/
+bool TestFlipObsVideo(struct obs_source_frame2* frame) {
+    AVFilterContext* pBufferSinkCtx;
+    AVFilterContext* pBufferSrcCtx;
+    const AVFilter* pBufferSrc = avfilter_get_by_name("buffer");
+    const AVFilter* pBufferSink = avfilter_get_by_name("buffersink");
+    AVFilterGraph* pFilterGraph = avfilter_graph_alloc();
+
+    // 视频帧高、宽、格式
+    int nWidth = frame->width;
+    int nHeight = frame->height;
+    enum AVPixelFormat format = AV_PIX_FMT_YUV420P;
+    //enum AVPixelFormat format = Convert2PixelFormat(frame->format);
+
+    char args[512];
+    snprintf(args, sizeof(args), "video_size=%dx%d:pix_fmt=%d:time_base=%d/%d:pixel_aspect=%d/%d",
+        nWidth, nHeight, format, 1, 25, 1, 1);
+
+    /* buffer video source: the decoded frames from the decoder will be inserted here. */
+    int ret = avfilter_graph_create_filter(&pBufferSrcCtx, pBufferSrc, "in", args, NULL, pFilterGraph);
+    if (ret < 0) {
+        //blog(LOG_ERROR, "Cannot create buffer source");
+        return false;
+    }
+
+    enum AVPixelFormat pixFmts[] = { format, AV_PIX_FMT_NONE };
+    AVBufferSinkParams* pBufferSinkParams = av_buffersink_params_alloc();
+    pBufferSinkParams->pixel_fmts = pixFmts;
+
+    /* buffer video sink: to terminate the filter chain. */
+    ret = avfilter_graph_create_filter(&pBufferSinkCtx, pBufferSink, "out", NULL, pBufferSinkParams, pFilterGraph);
+    av_free(pBufferSinkParams);
+    if (ret < 0) {
+        //blog(LOG_ERROR, "Cannot create buffer sink");
+        return false;
+    }
+
+    /* Endpoints for the filter graph. */
+    AVFilterInOut* pOutputs = avfilter_inout_alloc();
+    pOutputs->name = av_strdup("in");
+    pOutputs->filter_ctx = pBufferSrcCtx;
+    pOutputs->pad_idx = 0;
+    pOutputs->next = NULL;
+
+    AVFilterInOut* pInputs = avfilter_inout_alloc();
+    pInputs->name = av_strdup("out");
+    pInputs->filter_ctx = pBufferSinkCtx;
+    pInputs->pad_idx = 0;
+    pInputs->next = NULL;
+
+    // 水平翻转滤镜关键词
+    const char* pszFilterHFlip = "hflip";
+
+    // 将水平翻转指令添加到Graph中
+    if (avfilter_graph_parse_ptr(pFilterGraph, pszFilterHFlip, &pInputs, &pOutputs, NULL) < 0) {
+        //blog(LOG_ERROR, "Cannot add hflip to graph");
+        return false;
+    }
+
+    // 检测Graph有效性
+    if (avfilter_graph_config(pFilterGraph, NULL) < 0) {
+        //blog(LOG_ERROR, "Cannot graph config");
+        return false;
+    }
+
+    AVFrame* pAVFrameIn = av_frame_alloc();
+    AVFrame* pAVFrameOut = av_frame_alloc();
+
+    pAVFrameOut->width = pAVFrameIn->width = nWidth;
+    pAVFrameOut->height = pAVFrameIn->height = nHeight;
+    pAVFrameOut->format = pAVFrameIn->format = format;
+
+    // 将frame转换给pAVFrameIn
+    for (size_t i = 0; i < MAX_AV_PLANES; ++i) {
+        pAVFrameIn->data[i] = frame->data[i];
+        pAVFrameIn->linesize[i] = frame->linesize[i];
+    }
+
+    // 添加pAVFrameIn数据帧到过滤器
+    if (av_buffersrc_add_frame(pBufferSrcCtx, pAVFrameIn) < 0) {
+        //blog(LOG_ERROR, "Error add frame");
+        return false;
+    }
+
+    // 获取pAVFrameOut输出数据帧
+    if (av_buffersink_get_frame(pBufferSinkCtx, pAVFrameOut) < 0) {
+        //blog(LOG_ERROR, "Error get frame");
+        return false;
+    }
+
+    // 再将pAVFrameOut转换到frame
+    switch (format) {
+    case AV_PIX_FMT_YUV422P:
+        memcpy(frame->data[0], pAVFrameOut->data[0], nWidth * nHeight);
+        memcpy(frame->data[1], pAVFrameOut->data[1], nWidth * nHeight / 2);
+        memcpy(frame->data[2], pAVFrameOut->data[2], nWidth * nHeight / 2);
+        break;
+    case AV_PIX_FMT_YUV420P:
+        memcpy(frame->data[0], pAVFrameOut->data[0], nWidth * nHeight);
+        memcpy(frame->data[1], pAVFrameOut->data[1], nWidth * nHeight / 4);
+        memcpy(frame->data[2], pAVFrameOut->data[2], nWidth * nHeight / 4);
+        break;
+    default:
+        break;
+    }
+
+    // 释放
+    //av_frame_unref(pAVFrameOut);
+    av_frame_free(&pAVFrameIn);
+    av_frame_free(&pAVFrameOut);
+    avfilter_graph_free(&pFilterGraph);
+
+    return true;
 }
 
 int main() {
