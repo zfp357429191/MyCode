@@ -14,10 +14,10 @@ public:
 
     /**
     ***************************************************************
-    * @brief: 打开本地视频文件
+    * @brief: 转换视频生成YUV
     ***************************************************************
     */
-    void OpenLocalVideo(const std::string& strFilePath, const std::string& strFileName);
+    void ConvertVideoToYUV(const std::string& strMediaPath, const std::string& strFileName);
 
     /**
     ***************************************************************
@@ -26,6 +26,13 @@ public:
     ***************************************************************
     */
     void SetOutputPath(const std::string& strPath);
+
+    /**
+    ***************************************************************
+    * @brief:     利用SDL播放视频
+    ***************************************************************
+    */
+    void PlayVideoBySDL(const std::string& strMediaPath);
 
 private:
     /**

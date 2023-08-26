@@ -19,9 +19,16 @@ int main(int argc, char* argv[]) {
 
     MyFFmpeg ffmpeg;
     std::string strExePath = GetExePath();
-    std::string strFileName = "t1002.mp4";
-    ffmpeg.SetOutputPath(strExePath + "\\../../../Output/");
-    ffmpeg.OpenLocalVideo(strExePath + "\\../../../MediaSource/", strFileName);
+    std::string strFileName = "t1001.mp4";
+
+    // mp4转YUV测试
+    //ffmpeg.SetOutputPath(strExePath + "\\../../../Output/");
+    //ffmpeg.ConvertVideoToYUV(strExePath + "\\../../../MediaSource/", strFileName);
+
+    // SDL播放器测试
+    std::string strMediaPath = strExePath + "\\../../../MediaSource/" + strFileName;
+    ffmpeg.PlayVideoBySDL(strMediaPath);
+
     return 0;
 }
 

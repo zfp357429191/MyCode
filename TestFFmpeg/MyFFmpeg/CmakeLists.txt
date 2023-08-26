@@ -8,25 +8,31 @@ set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} /SAFESEH:NO")
 set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} /SAFESEH:NO")
 set(CMAKE_MODULE_LINKER_FLAGS "${CMAKE_MODULE_LINKER_FLAGS} /SAFESEH:NO")
 
+set(FFMPEG_DIR "${DepsPath}/FFmpeg/ffmpeg3.4.2")
+set(SDL_DIR "${DepsPath}/SDL2.0")
+
 
 # 引用第三方库头文件
-include_directories(${DepsPath}/123/456/../../include)
+include_directories(${FFMPEG_DIR}/include)        # FFMpeg
+include_directories(${SDL_DIR}/include)           # SDL2
 
 # 编译源文件
 add_executable(${PROJECT_NAME} main.cpp MyFFmpeg.cpp MyFFmpeg.hpp)
 
 # 链接库文件
 target_link_libraries(${PROJECT_NAME}
-                    ${DepsPath}/lib/win32/avcodec.lib
-                    ${DepsPath}/lib/win32/avformat.lib
-                    ${DepsPath}/lib/win32/avutil.lib
-                    ${DepsPath}/lib/win32/swscale.lib
-                    ${DepsPath}/lib/win32/swresample.lib
+                    ${FFMPEG_DIR}/lib/win32/avcodec.lib
+                    ${FFMPEG_DIR}/lib/win32/avformat.lib
+                    ${FFMPEG_DIR}/lib/win32/avutil.lib
+                    ${FFMPEG_DIR}/lib/win32/swscale.lib
+                    ${FFMPEG_DIR}/lib/win32/swresample.lib
+                    ${SDL_DIR}/lib/SDL2.lib
+                    ${SDL_DIR}/lib/SDL2main.lib
                     )
 
 
 # 拷贝依赖库文件
-file (GLOB FFmpegDlls ${DepsPath}/bin/win32/*.dll)
+file (GLOB FFmpegDlls ${FFMPEG_DIR}/bin/win32/*.dll)
 foreach(FFmpegDll ${FFmpegDlls})
     add_custom_command(TARGET MyFFmpeg POST_BUILD
             COMMAND "${CMAKE_COMMAND}" -E copy   
@@ -34,4 +40,10 @@ foreach(FFmpegDll ${FFmpegDlls})
             ${CMAKE_BINARY_DIR}/${target}$<$<CONFIG:Debug>:Debug>${target}$<$<CONFIG:Release>:Release>/
             )
 endforeach()
+
+add_custom_command(TARGET MyFFmpeg POST_BUILD
+        COMMAND "${CMAKE_COMMAND}" -E copy
+        ${SDL_DIR}/bin/SDL2.dll
+        ${CMAKE_BINARY_DIR}/${target}$<$<CONFIG:Debug>:Debug>${target}$<$<CONFIG:Release>:Release>/
+        )
 
