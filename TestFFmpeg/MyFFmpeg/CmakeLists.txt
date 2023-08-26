@@ -10,7 +10,7 @@ set(CMAKE_MODULE_LINKER_FLAGS "${CMAKE_MODULE_LINKER_FLAGS} /SAFESEH:NO")
 
 
 # 引用第三方库头文件
-include_directories(${DepsPath}/include)
+include_directories(${DepsPath}/123/456/../../include)
 
 # 编译源文件
 add_executable(${PROJECT_NAME} main.cpp MyFFmpeg.cpp MyFFmpeg.hpp)
