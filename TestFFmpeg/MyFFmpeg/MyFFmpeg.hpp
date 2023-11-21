@@ -34,6 +34,13 @@ public:
     */
     void PlayVideoBySDL(const std::string& strMediaPath);
 
+    /**
+    ***************************************************************
+    * @brief:     利用SDL播放音频
+    ***************************************************************
+    */
+    void PlayAudioBySDL(const std::string& strMediaPath);
+
 private:
     /**
     ***************************************************************

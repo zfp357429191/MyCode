@@ -19,15 +19,20 @@ int main(int argc, char* argv[]) {
 
     MyFFmpeg ffmpeg;
     std::string strExePath = GetExePath();
-    std::string strFileName = "t1001.mp4";
+    std::string strTestVideoName = "t1001.mp4";
+    std::string strTestAudioName = "t2001.mp3";
 
     // mp4转YUV测试
     //ffmpeg.SetOutputPath(strExePath + "\\../../../Output/");
     //ffmpeg.ConvertVideoToYUV(strExePath + "\\../../../MediaSource/", strFileName);
 
     // SDL播放器测试
-    std::string strMediaPath = strExePath + "\\../../../MediaSource/" + strFileName;
-    ffmpeg.PlayVideoBySDL(strMediaPath);
+    std::string strTestVideoPath = strExePath + "\\../../../MediaSource/" + strTestVideoName;
+    //ffmpeg.PlayVideoBySDL(strTestVideoPath);
+
+
+    std::string strTestAudioPath = strExePath + "\\../../../MediaSource/" + strTestAudioName;
+    ffmpeg.PlayAudioBySDL(strTestAudioPath);
 
     return 0;
 }
